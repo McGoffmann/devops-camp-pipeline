@@ -26,56 +26,24 @@ pipeline {
 
         stage('Application docker build') {
             steps {
-                echo "Building application image"
-                withCredentials([usernameColonPassword(credentialsId: CREDENTIALS_ID, variable: 'HARBOR-AUTH')]) {
-                    script {
-                        sh 'docker build -t $APP_IMAGE_NAME-$COMMIT_HASH -f ./app/Dockerfile ./afs-labs-student'
-                        docker.withRegistry('https://$HARBOR_REGISTRY', CREDENTIALS_ID) {
-                            sh 'docker tag $APP_IMAGE_NAME-$COMMIT_HASH $HARBOR_REGISTRY/$HARBOR_PROJECT/$APP_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                            sh 'docker push $HARBOR_REGISTRY/$HARBOR_PROJECT/$APP_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                        }
-                    }
-                }
+                build_image('application', APP_IMAGE_NAME, './app/Dockerfile')
             }
             post {
                 always {
-                    echo "Clean local $APP_IMAGE_NAME image"
-                    script {
-                        try {
-                            sh 'docker rmi $APP_IMAGE_NAME-$COMMIT_HASH:latest'
-                            sh 'docker rmi $HARBOR_REGISTRY/$HARBOR_PROJECT/$APP_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                        } catch (err) {
-                            echo err.getMessage()
-                        }
-                    }
+                    clean_image(APP_IMAGE_NAME)
                 }
-            }        }
+            }
+        }
         stage('Database docker build') {
             steps {
-                echo "Building database image"
-                withCredentials([usernameColonPassword(credentialsId: CREDENTIALS_ID, variable: 'HARBOR-AUTH')]) {
-                    script {
-                        sh 'docker build -t $DB_IMAGE_NAME-$COMMIT_HASH -f ./db/Dockerfile ./afs-labs-student'
-                        docker.withRegistry('https://$HARBOR_REGISTRY', CREDENTIALS_ID) {
-                            sh 'docker tag $DB_IMAGE_NAME-$COMMIT_HASH $HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                            sh 'docker push $HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                        }
-                    }
-                }
+                build_image('database', DB_IMAGE_NAME, './db/Dockerfile')
             }
             post {
                 always {
-                    echo "Clean local $DB_IMAGE_NAME image"
-                    script {
-                        try {
-                            sh 'docker rmi $DB_IMAGE_NAME-$COMMIT_HASH:latest'
-                            sh 'docker rmi $HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                        } catch (err) {
-                            echo err.getMessage()
-                        }
-                    }
+                    clean_image(DB_IMAGE_NAME)
                 }
-            }        }
+            }
+        }
         //TODO("Lab 7 - Automated Security Scans"): add a stage
         stage('Deploy') {
             steps {
@@ -88,6 +56,31 @@ pipeline {
         cleanup {
             echo "Clean workspace"
             sh 'rm -rf .git ./*'
+        }
+    }
+}
+
+def build_image(type, IMAGE_NAME, dockerfile_location) {
+    echo "Building $type image"
+    withCredentials([usernameColonPassword(credentialsId: CREDENTIALS_ID, variable: 'HARBOR-AUTH')]) {
+        script {
+            sh "docker build -t $IMAGE_NAME-$COMMIT_HASH -f $dockerfile_location ./afs-labs-student"
+            docker.withRegistry('https://$HARBOR_REGISTRY', CREDENTIALS_ID) {
+                sh "docker tag $IMAGE_NAME-$COMMIT_HASH $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH"
+                sh "docker push $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH"
+            }
+        }
+    }
+}
+
+def clean_image(IMAGE_NAME) {
+    echo "Clean local $IMAGE_NAME image"
+    script {
+        try {
+            sh "docker rmi $IMAGE_NAME-$COMMIT_HASH:latest"
+            sh "docker rmi $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH"
+        } catch (err) {
+            echo err.getMessage()
         }
     }
 }
