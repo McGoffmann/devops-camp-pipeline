@@ -52,6 +52,17 @@ pipeline {
                   }
             }
         }
+        stage('Image Sign') {
+            steps {
+                echo "Signing Container Image"
+                // withCredentials([usernameColonPassword(credentialsId: CREDENTIALS_ID, variable: 'HARBOR-AUTH')]) {
+                    script {
+                        sh 'docker build -t cosign-$COMMIT_HASH -f ./cosign/Dockerfile .'
+                        // sh 'docker run -v /var/run/docker.sock:/var/run/docker.sock --rm cosign:latest sign registry.dev.afsmtddso.com/mhoffmann-harbor-project/lab-env-repo@sha256:8766eb91d9502a8f4a516fc1a9334cc8099113e6caef61df161efd4457397fe1'
+                    }
+                // }
+            }
+        }
         stage('Deploy') {
             steps {
                 echo "Deployment stage"
