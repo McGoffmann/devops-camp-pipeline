@@ -7,7 +7,7 @@ pipeline {
         HARBOR_REGISTRY = 'registry.dev.afsmtddso.com'
         HARBOR_PROJECT = 'mhoffmann-harbor-project'
         APP_IMAGE_NAME = 'app'
-        DB_IMAGE_NAME = 'db'
+        // DB_IMAGE_NAME = 'db'
         CREDENTIALS_ID = 'mhoffmann-harbor-auth'
 
     }
@@ -34,22 +34,22 @@ pipeline {
                 }
             }
         }
-        stage('Database docker build') {
-            steps {
-                build_image('database', DB_IMAGE_NAME, './db/Dockerfile')
-            }
-            post {
-                always {
-                    clean_image(DB_IMAGE_NAME)
-                }
-            }
-        }
+        // stage('Database docker build') {
+        //     steps {
+        //         build_image('database', DB_IMAGE_NAME, './db/Dockerfile')
+        //     }
+        //     post {
+        //         always {
+        //             clean_image(DB_IMAGE_NAME)
+        //         }
+        //     }
+        // }
         //TODO("Lab 7 - Automated Security Scans"): add a stage
         stage('Deploy') {
             steps {
                 echo "Deployment stage"
                 sh 'kubectl -n mhoffmann set image deployment/app-deployment app-deployment=$HARBOR_REGISTRY/$HARBOR_PROJECT/$APP_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                sh 'kubectl -n mhoffmann set image deployment/db-deployment db-deployment=$HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
+                // sh 'kubectl -n mhoffmann set image deployment/db-deployment db-deployment=$HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
             }
         }
     }
