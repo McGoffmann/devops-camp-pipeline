@@ -40,8 +40,12 @@ pipeline {
                               sh 'docker build -t $DB_IMAGE_NAME-$COMMIT_HASH -f ./db/Dockerfile ./afs-labs-student'
                               docker.withRegistry('https://$HARBOR_REGISTRY', CREDENTIALS_ID) {
                                   sh 'docker tag $DB_IMAGE_NAME-$COMMIT_HASH $HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                                  sh 'docker push $HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
-                              }
+                                IMAGE_DIGEST = sh (
+                                    script: "docker push $HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH",
+                                    returnStdout: true
+                                ).trim()
+                                IMAGE_DIGEST = (IMAGE_DIGEST =~ /$COMMIT_HASH-$PIPELINE_HASH: digest: (sha256:.+) size/)[ 0 ][ 1 ]
+                                echo "IMAGE_DIGEST = $IMAGE_DIGEST"                              }
                           }
                       }
                 }
@@ -64,6 +68,39 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: CREDENTIALS_ID, usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                         echo "Scanning $DB_IMAGE_NAME image"
                         sh 'python harbor_scanner.py -i $DB_IMAGE_NAME -r $HARBOR_REGISTRY -p $HARBOR_PROJECT -c ${USERNAME}:${PASSWORD}'
+                    }
+                }
+            }
+            stage('Sign Image') {
+                steps {
+                    echo "Signing Container Image"
+                    withCredentials([usernameColonPassword(credentialsId: CREDENTIALS_ID, variable: 'HARBOR-AUTH')]) {
+                        script {
+                            docker.withRegistry('https://$HARBOR_REGISTRY', CREDENTIALS_ID) {
+                                DOCKER_CONFIG_LOCATION = sh (
+                                    script: 'docker login https://registry.dev.afsmtddso.com/ 2>&1',
+                                    returnStdout: true
+                                ).trim()
+                                DOCKER_CONFIG_LOCATION = (DOCKER_CONFIG_LOCATION =~ /stored unencrypted in (.+)/)[ 0 ][ 1 ]
+                                DOCKER_CONFIG_LOCATION = DOCKER_CONFIG_LOCATION.substring(0, DOCKER_CONFIG_LOCATION.length() - 1)
+                                script {
+                                    sh 'docker build -t cosign-$COMMIT_HASH -f ./cosign/Dockerfile .'
+                                    sh "yes | docker run -i -v /var/run/docker.sock:/var/run/docker.sock -v $DOCKER_CONFIG_LOCATION:/root/.docker/config.json --rm cosign-$COMMIT_HASH sign --key cosign.key $HARBOR_REGISTRY/$HARBOR_PROJECT/$DB_IMAGE_NAME@$IMAGE_DIGEST"
+                                }
+                            }
+                        }
+                    }
+                }
+                post {
+                    always {
+                        echo "Clean local cosign image"
+                        script {
+                            try {
+                                sh "docker rmi cosign-$COMMIT_HASH:latest"
+                            } catch (err) {
+                                echo err.getMessage()
+                            }
+                        }
                     }
                 }
             }
