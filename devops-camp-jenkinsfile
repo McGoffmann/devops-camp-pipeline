@@ -50,7 +50,7 @@ pipeline {
                     script {
                         docker.withRegistry('https://$HARBOR_REGISTRY', CREDENTIALS_ID) {
                             DOCKER_CONFIG_LOCATION = sh (
-                                script: 'docker login https://registry.dev.afsmtddso.com/ 2>&1',
+                                script: 'docker login https://$HARBOR_REGISTRY/ 2>&1',
                                 returnStdout: true
                             ).trim()
                             DOCKER_CONFIG_LOCATION = (DOCKER_CONFIG_LOCATION =~ /stored unencrypted in (.+)/)[ 0 ][ 1 ]
