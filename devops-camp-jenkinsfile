@@ -9,6 +9,7 @@ pipeline {
         APP_IMAGE_NAME = 'app'
         CREDENTIALS_ID = 'mhoffmann-harbor-auth'
         EKS_NAMESPACE = 'mhoffmann'
+        DOCKER_CONFIG_LOCATION = ''
     }
     stages {
         stage('Application repository') {
@@ -44,12 +45,22 @@ pipeline {
         stage('Image Sign') {
             steps {
                 echo "Signing Container Image"
-                // withCredentials([usernameColonPassword(credentialsId: CREDENTIALS_ID, variable: 'HARBOR-AUTH')]) {
+                withCredentials([usernameColonPassword(credentialsId: CREDENTIALS_ID, variable: 'HARBOR-AUTH')]) {
                     script {
-                        sh 'docker build -t cosign-$COMMIT_HASH -f ./cosign/Dockerfile .'
-                        // sh 'docker run -v /var/run/docker.sock:/var/run/docker.sock --rm cosign:latest sign registry.dev.afsmtddso.com/mhoffmann-harbor-project/lab-env-repo@sha256:8766eb91d9502a8f4a516fc1a9334cc8099113e6caef61df161efd4457397fe1'
+                        docker.withRegistry('https://$HARBOR_REGISTRY', CREDENTIALS_ID) {
+                            DOCKER_CONFIG_LOCATION = sh (
+                                script: 'docker login https://registry.dev.afsmtddso.com/ 2>&1',
+                                returnStdout: true
+                            ).trim()
+                            DOCKER_CONFIG_LOCATION = (DOCKER_CONFIG_LOCATION =~ /stored unencrypted in (.+)/)[ 0 ][ 1 ]
+                            DOCKER_CONFIG_LOCATION = DOCKER_CONFIG_LOCATION.substring(0, DOCKER_CONFIG_LOCATION.length() - 1)
+                            script {
+                                sh 'docker build -t cosign-$COMMIT_HASH -f ./cosign/Dockerfile .'
+                                sh 'yes | docker run -i -v /var/run/docker.sock:/var/run/docker.sock -v $DOCKER_CONFIG_LOCATION:/root/.docker/config.json --rm cosign-$COMMIT_HASH sign --key cosign.key $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:$COMMIT_HASH-$PIPELINE_HASH'
+                            }
+                        }
                     }
-                // }
+                }
             }
         }
         stage('Deploy') {
